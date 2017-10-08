@@ -1,0 +1,171 @@
+#!/bin/bash
+
+set -e
+
+mirror_dir='/mnt/archlinux32'
+website_dir='/usr/src/github/archlinux32/website'
+
+tmp_dir="$(mktemp -d)"
+cleanup() {
+  if mountpoint -q "${tmp_dir}"; then
+    sudo umount "${tmp_dir}"
+  fi
+  rm -rf --one-file-system "${tmp_dir}"
+}
+trap cleanup EXIT
+
+(
+  printf '    <div id="download-mirrors">\n'
+  curl -Ss 'https://raw.githubusercontent.com/archlinux32/packages/master/core/pacman-mirrorlist/mirrorlist?'"$(
+    head -c 24 /dev/urandom | \
+      base64 -w0
+  )" | \
+    sed '
+      0,/^$/d
+      /^$/d
+      /^## /{
+        s|^## |\n        </ul>\n\n        <h5>|
+        s|$|</h5>\n\n        <ul>\n|
+        '"$(
+          while read -r flag country; do
+            printf \
+              's|<h5>%s</h5>|<h5><span class="fam-flag fam-flag-%s" title="%s"></span> %s</h5>|\n' \
+              "${country}" \
+              "${flag}" \
+              "${country}" \
+              "${country}"
+          done < \
+            "${0%/*}/flag-names"
+        )"'
+      }
+      /^# Server = /{
+        s|^# Server = \(.*//\)\([^/]*\)\(/.*\)\$arch/\$repo$|'"$(
+          printf \
+            '            %s\\n' \
+            '<li><a href="\1\2\3archisos/"' \
+            '    title="Download from \1\2\3">\2</a></li>'
+        )"'|
+      }
+    ' | \
+    sed '
+      0,/<\/ul>/d
+    '
+  printf '        </ul>\n\n'
+  printf '    </div>\n'
+) | \
+  sed -i '
+    :emptyLines
+    /^\n*$/{
+      N
+      bemptyLines
+    }
+    /^\(\s*\n\)*\s*<div id="download-mirrors">$/{
+      :a
+      s|^.*</div>||
+      tb
+      $!N
+      ba
+      :b
+      r /dev/stdin
+    }
+  ' "${website_dir}/download/index.html"
+
+latest_iso_date="$(
+  ls "${mirror_dir}/archisos" | \
+    grep '^archlinux-[0-9.]\+-\(dual\|i.86\)\.iso$' | \
+    sed 's@^archlinux-\([0-9.]\+\)-\(dual\|i.86\)\.iso$@\1@' | \
+    sort -k1,1 -u | \
+    tail -n1
+)"
+
+declare -A desc
+desc['i686']='i686 only'
+desc['dual']='dual bootable'
+
+unset kernels
+unset sizes
+declare -A sizes
+declare -A md5
+declare -A sha512
+
+for arch in "${!desc[@]}"; do
+  iso="${mirror_dir}/archisos/archlinux-${latest_iso_date}-${arch}.iso"
+  if [ ! -f "${iso}" ]; then
+    >&2 echo "Can't find iso to arch ${arch}."
+    exit 1
+  fi
+  sudo mount -o loop,ro "${iso}" "${tmp_dir}"
+  kernels="$(
+    printf '%s\n' ${kernels} $(
+      grep '/linux-[0-9]' "${tmp_dir}/arch/pkglist."*".txt" | \
+        grep -v 'pkglist\.x86_64\.txt:' | \
+        sed '
+          s|^\(.*:\)\?core/linux-||
+          s|-[0-9]\+$||
+        '
+      ) | \
+      sort -u
+  )"
+  sudo umount "${tmp_dir}"
+  sizes["${arch}"]="$(
+    printf 'scale=1; %s/1024/1024\n' "$(stat -c'%s' "${iso}")" | \
+      bc
+  )"
+  md5["${arch}"]="$(
+    grep "\s${iso##*/}\$" "${mirror_dir}/archisos/md5sums" | \
+      awk '{print $1}'
+  )"
+  sha512["${arch}"]="$(
+    grep "\s${iso##*/}\$" "${mirror_dir}/archisos/sha512sums" | \
+      awk '{print $1}'
+  )"
+  sign_keys="$(
+    printf '%s\n' ${sign_keys} $(
+      gpg --status-fd=1 --verify "${iso}.sig" "${iso}" 2> /dev/null | \
+        grep '^\[GNUPG:] VALIDSIG [0-9A-F]\+ ' | \
+        cut -d' ' -f3
+    ) | \
+      sort -u
+  )"
+done
+
+if [ $(echo "${kernels}" | grep -c '\S') -ne 1 ]; then
+  >&2 echo 'Not exactly one kernel on the iso:'
+  >&2 echo "${kernels}"
+  exit 1
+fi
+
+if [ $(echo "${sign_keys}" | grep -c '\S') -ne 1 ]; then
+  >&2 echo 'Not exactly one key used for signing the iso:'
+  >&2 echo "'${sign_keys}'"
+  exit 1
+fi
+
+if [ "${sign_keys}" != 'F2955C3B63EE4E421F30670A3B08EFC6BA974CFC' ] &&
+  [ "${sign_keys}" != '248BF41F9BDD61D41D060AE774EDA3C6B06D0506' ] &&
+  [ "${sign_keys}" != 'DE9F7688CACF04FEB81A6C590AEEC90755DA7B5A' ]; then
+  >&2 echo "Unknown signing key '${sign_keys}'."
+  exit 1
+fi
+
+values=(
+  'Current Release' "${latest_iso_date}"
+  'Included Kernel' "${kernels}"
+  'PGP Key' '<a href="http://pgp.mit.edu/pks/lookup?search=0x'"${sign_keys}"'\&op=index">'"${sign_keys}"'</a>'
+)
+for arch in 'i686' 'dual'; do
+  values+=(
+    "ISO Size (${desc["${arch}"]})" "${sizes["${arch}"]} MB"
+    "MD5 (${desc["${arch}"]})" "${md5["${arch}"]}"
+    "SHA512 (${desc["${arch}"]})" "${sha512["${arch}"]}"
+  )
+done
+
+sed -i "$(
+  printf '/%s:/s|</strong>.*</li>|</strong> %s</li>|\n' "${values[@]}"
+  printf '/archlinux-[0-9.]\+-%s\.iso\.sig/s@archlinux-[0-9.]\+-%s\.iso\.sig@archlinux-%s-%s.iso.sig@\n' \
+    'i686' 'i686' "${latest_iso_date}" 'i686' \
+    'dual' 'dual' "${latest_iso_date}" 'dual'
+)
+" \
+  "${website_dir}/download/index.html"
