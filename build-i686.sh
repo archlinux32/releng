@@ -52,11 +52,16 @@ then
 fi
 
 sudo pacman --noconfirm -Syu archiso32
+cat << "__ENDOFARCH32MIRRORLIST__" > /etc/pacman.d/mirrorlist32
+Server = https://32.arlm.tyzoid.com/$arch/$repo
+Server = http://arch32.mirrors.simplysam.us/$arch/$repo
+Server = https://mirror.archlinux32.org/$arch/$repo
+__ENDOFARCH32MIRRORLIST__
 __ENDOFPROVISION.SH__
 
 vagrant up
 vagrant ssh -c "sudo reboot";
-vagrant ssh -c "sudo bash -c '/usr/share/archiso/configs/releng/build.sh'";
+vagrant ssh -c "sudo bash -c '/usr/share/archiso/configs/releng/build.sh -v'";
 
 vagrant ssh-config > config.txt
 scp -rF config.txt default:/home/vagrant/out ../
