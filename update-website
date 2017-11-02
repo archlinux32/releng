@@ -5,6 +5,29 @@ set -e
 mirror_dir='/mnt/archlinux32'
 website_dir='/usr/src/github/archlinux32/website'
 
+usage() {
+  >&2 echo ''
+  >&2 echo 'get-package-updates: check for packages that need to be built,'
+  >&2 echo ' and build a list in the proper build order'
+  >&2 echo ''
+  >&2 echo 'possible options:'
+  >&2 echo '  -h|--help:    Show this help and exit.'
+  >&2 echo '  --magnet-i686 $link:'
+  >&2 echo '                Set archiso-i686 magnet link to $link.'
+  >&2 echo '  --magnet-dual $link:'
+  >&2 echo '                Set archiso-dual magnet link to $link.'
+  [ -z "$1" ] && exit 1 || exit "$1"
+}
+
+eval set -- "$(
+  getopt -o h \
+  --long help \
+  --long magnet-i686: \
+  --long magnet-dual: \
+  -n "$(basename "$0")" -- "$@" || \
+  echo usage
+)"
+
 tmp_dir="$(mktemp -d)"
 cleanup() {
   if mountpoint -q "${tmp_dir}"; then
@@ -13,6 +36,45 @@ cleanup() {
   rm -rf --one-file-system "${tmp_dir}"
 }
 trap cleanup EXIT
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    '--magnet-i686')
+      if [ -s "${tmp_dir}/magnet.i686" ]; then
+        printf 'Option %s given multiple times.\n' "$1"
+        usage
+      fi
+      shift
+      echo "$1" | \
+        tr -d '\n' > \
+        "${tmp_dir}/magnet.i686"
+    ;;
+    '--magnet-dual')
+      if [ -s "${tmp_dir}/magnet.dual" ]; then
+        printf 'Option %s given multiple times.\n' "$1"
+        usage
+      fi
+      shift
+      echo "$1" | \
+        tr -d '\n' > \
+        "${tmp_dir}/magnet.dual"
+    ;;
+    '--')
+      shift
+      break
+    ;;
+    *)
+      >&2 printf 'Whoops, option "%s" is not yet implemented!\n' "$1"
+      exit 42
+    ;;
+  esac
+  shift
+done
+
+if [ $# -gt 0 ]; then
+  >&2 echo 'Too many arguments.'
+  exit 2
+fi
 
 (
   printf '    <div id="download-mirrors">\n'
@@ -169,3 +231,19 @@ sed -i "$(
 )
 " \
   "${website_dir}/download/index.html"
+
+for arch in "${!desc[@]}"; do
+  if [ ! -s "${tmp_dir}/magnet.${arch}" ]; then
+    continue
+  fi
+  if ! tr '&' '\n' < \
+    "${tmp_dir}/magnet.${arch}" | \
+    grep -qxF "dn=archlinux-${latest_iso_date}-${arch}.iso"; then
+    >&2 printf 'Magnet link for %s is not for %s, skipping.\n' "${arch}" "archlinux-${latest_iso_date}-${arch}.iso"
+    continue
+  fi
+  sed -i '
+    /<li><a href="magnet:?.*-'"${arch}"'\.iso/ s/href="[^"]\+"/href="'"$(sed 's|&|\\&|g' "${tmp_dir}/magnet.${arch}")"'"/
+    /title="Magnet link">Magnet link for \S\+ ('"${desc["${arch}"]}"')/ s/>Magnet link for \S\+ />Magnet link for '"${latest_iso_date}"' /
+  ' "${website_dir}/download/index.html"
+done
