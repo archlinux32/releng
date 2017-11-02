@@ -38,8 +38,8 @@ trap cleanup EXIT
             "${0%/*}/flag-names"
         )"'
       }
-      /^# Server = /{
-        s|^# Server = \(.*//\)\([^/]*\)\(/.*\)\$arch/\$repo$|'"$(
+      /^#Server = /{
+        s|^#Server = \(.*//\)\([^/]*\)\(/.*\)\$arch/\$repo$|'"$(
           printf \
             '            %s\\n' \
             '<li><a href="\1\2\3archisos/"' \
