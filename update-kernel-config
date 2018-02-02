@@ -19,7 +19,7 @@ diff=$(
         T
         p
       '
-  )" "/usr/src/github/archlinux32/packages/$1/$2/config-i686"
+  )" "/usr/src/github/archlinux32/packages/$1/$2/config"
   printf '%s\n' "${diff}" | \
     sed -n '
       s/^+//
@@ -27,4 +27,4 @@ diff=$(
       p
     '
 } | \
-  sponge "/usr/src/github/archlinux32/packages/$1/$2/config-i686"
+  sponge "/usr/src/github/archlinux32/packages/$1/$2/config"
