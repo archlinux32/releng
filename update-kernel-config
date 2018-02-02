@@ -1,0 +1,30 @@
+#!/bin/bash
+
+if [ $# -ne 3 ]; then
+  >&2 echo 'usage: update-kernel-config [repository] [kernel-name] [old-git-revision]'
+  exit 2
+fi
+
+diff=$(
+  git -C "/usr/src/archlinux/packages/$2/repos/$1-x86_64" diff "$3" -- config | \
+    grep '^[+-]' | \
+    grep -v '^+++\|^---'
+)
+
+{
+  grep -vxF "$(
+    printf '%s\n' "${diff}" | \
+      sed -n '
+        s/^-//
+        T
+        p
+      '
+  )" "/usr/src/github/archlinux32/packages/$1/$2/config-i686"
+  printf '%s\n' "${diff}" | \
+    sed -n '
+      s/^+//
+      T
+      p
+    '
+} | \
+  sponge "/usr/src/github/archlinux32/packages/$1/$2/config-i686"
