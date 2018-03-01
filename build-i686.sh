@@ -12,6 +12,7 @@ END
 cat << "__ENDOFPROVISION.SH__" > provision.sh
 #!/bin/bash
 set -e
+ln -svf /usr/share/zoneinfo/America/Detroit /etc/localtime
 tmpFile="$(mktemp)"
 curl -o "${tmpFile}" "https://arch.eckner.net/archlinuxewe/masterkeys.gpg"
 pacman-key --add "${tmpFile}"
@@ -51,19 +52,26 @@ then
   rm -f "${tmpFile}"
 fi
 
+sudo pacman --noconfirm -Sy archlinux-keyring archlinux32-keyring
 sudo pacman --noconfirm -Syu archiso32
 cat << "__ENDOFARCH32MIRRORLIST__" > /etc/pacman.d/mirrorlist32
 Server = https://32.arlm.tyzoid.com/$arch/$repo
 Server = http://arch32.mirrors.simplysam.us/$arch/$repo
 Server = https://mirror.archlinux32.org/$arch/$repo
 __ENDOFARCH32MIRRORLIST__
+
+cat << "__ENDOFISOBUILDSCRIPT__" | sudo tee /root/buildiso.sh >/dev/null
+#!/bin/bash
+/usr/share/archiso/configs/releng/build.sh -v -V"$(date -d"$(date -d "+2day" +%Y-%m-01T12:00:00Z)" +%Y.%m.%d)" -L"ARCH_$(date -d"$(date -d "+2day" +%Y-%m-01T12:00:00Z)" +%Y%m)"
+__ENDOFISOBUILDSCRIPT__
+chmod +x /root/buildiso.sh
 __ENDOFPROVISION.SH__
 
 vagrant up
 vagrant ssh -c "sudo reboot";
-vagrant ssh -c "sudo bash -c '/usr/share/archiso/configs/releng/build.sh -v'";
+vagrant ssh -c 'sudo bash -c "/root/buildiso.sh"';
 
 vagrant ssh-config > config.txt
 scp -rF config.txt default:/home/vagrant/out ../
 
-vagrant destroy -f
+#vagrant destroy -f
