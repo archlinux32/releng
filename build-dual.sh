@@ -17,8 +17,8 @@ tmpFile="$(mktemp)"
 curl -o "${tmpFile}" "https://arch.eckner.net/archlinuxewe/masterkeys.gpg"
 pacman-key --add "${tmpFile}"
 rm -f "${tmpFile}"
-pacman-key --lsign-key 0x43BF68D3
-pacman-key --lsign-key 0x20194BA1
+pacman-key --lsign-key 5FDCA472AB93292BC678FD59255A76DB9A12601A
+pacman-key --lsign-key F8028D351891AE15970A2B3B3CFB0AD8F60030F8
 if ! grep -q "^Server = https://arch\.eckner\.net" /etc/pacman.d/mirrorlist
 then
   ml="$(
