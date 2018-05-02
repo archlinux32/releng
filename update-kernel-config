@@ -6,7 +6,7 @@ if [ $# -ne 3 ]; then
 fi
 
 diff=$(
-  git -C "/usr/src/archlinux/packages/$2/repos/$1-x86_64" diff "$3" -- config | \
+  git -C "/usr/src/archlinux/packages/$2/repos/$1-x86_64" diff "$3" HEAD -- config | \
     grep '^[+-]' | \
     grep -v '^+++\|^---'
 )
