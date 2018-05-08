@@ -16,6 +16,10 @@ usage() {
   >&2 echo '                Set archiso-i686 magnet link to $link.'
   >&2 echo '  --magnet-dual $link:'
   >&2 echo '                Set archiso-dual magnet link to $link.'
+  >&2 echo '  --torrent-seed-i686 $link:'
+  >&2 echo '                Set archiso-i686 torrent link to $link.'
+  >&2 echo '  --torrent-seed-dual $link:'
+  >&2 echo '                Set archiso-dual torrent link to $link.'
   >&2 echo '  --website-dir $dir:'
   >&2 echo '                Set website-dir to $dir.'
   >&2 echo '  --mirror-dir $dir:'
@@ -28,6 +32,8 @@ eval set -- "$(
   --long help \
   --long magnet-i686: \
   --long magnet-dual: \
+  --long torrent-seed-i686: \
+  --long torrent-seed-dual: \
   --long mirror-dir: \
   --long website-dir: \
   -n "$(basename "$0")" -- "$@" || \
@@ -65,6 +71,25 @@ while [ $# -gt 0 ]; do
         tr -d '\n' > \
         "${tmp_dir}/magnet.dual"
     ;;
+    '--torrent-seed-i686')
+      if [ -s "${tmp_dir}/torrent-seed.i686" ]; then
+        printf 'Option %s given multiple times.\n' "$1"
+        usage
+      fi
+      shift
+      echo "$1" | \
+        tr -d '\n' > \
+        "${tmp_dir}/torrent-seed.i686"
+    ;;
+    '--torrent-seed-dual')
+      if [ -s "${tmp_dir}/torrent-seed.dual" ]; then
+        printf 'Option %s given multiple times.\n' "$1"
+        usage
+      fi
+      shift
+      echo "$1" | \
+        tr -d '\n' > \
+        "${tmp_dir}/torrent-seed.dual"
     '--mirror-dir')
       if [ -s "${tmp_dir}/mirror_dir.set" ]; then
         printf 'Option %s given multiple times.\n' "$1"
@@ -269,5 +294,19 @@ for arch in "${!desc[@]}"; do
   sed -i '
     /<li><a href="magnet:?.*-'"${arch}"'\.iso/ s/href="[^"]\+"/href="'"$(sed 's|&|\\&|g' "${tmp_dir}/magnet.${arch}")"'"/
     /title="Magnet link">Magnet link for \S\+ ('"${desc["${arch}"]}"')/ s/>Magnet link for \S\+ />Magnet link for '"${latest_iso_date}"' /
+  ' "${website_dir}/download/index.html"
+done
+
+for arch in "${!desc[@]}"; do
+  if [ ! -s "${tmp_dir}/torrent-seed.${arch}" ]; then
+    continue
+  fi
+  if ! grep -qF "archlinux-${latest_iso_date}-${arch}" "${tmp_dir}/torrent-seed.${arch}"; then
+    >&2 printf 'Torrent seed for %s is not for %s, skipping.\n' "${arch}" "archlinux-${latest_iso_date}-${arch}.iso"
+    continue
+  fi
+  sed -i '
+  /<li><a href="http.*-'"${arch}"'\.iso.torrent/ s/href="[^"]\+"/href="'"$(sed -e 's_/_\\/_g' "${tmp_dir}/torrent-seed.${arch}")"'"/
+    /title="Download torrent">Torrent for \S\+ ('"${desc["${arch}"]}"')/ s/>Torrent for \S\+ />Torrent for '"${latest_iso_date}"' /
   ' "${website_dir}/download/index.html"
 done
