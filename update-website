@@ -16,6 +16,10 @@ usage() {
   >&2 echo '                Set archiso-i686 magnet link to $link.'
   >&2 echo '  --magnet-dual $link:'
   >&2 echo '                Set archiso-dual magnet link to $link.'
+  >&2 echo '  --website-dir $dir:'
+  >&2 echo '                Set website-dir to $dir.'
+  >&2 echo '  --mirror-dir $dir:'
+  >&2 echo '                Set mirror-dir to $dir.'
   [ -z "$1" ] && exit 1 || exit "$1"
 }
 
@@ -24,6 +28,8 @@ eval set -- "$(
   --long help \
   --long magnet-i686: \
   --long magnet-dual: \
+  --long mirror-dir: \
+  --long website-dir: \
   -n "$(basename "$0")" -- "$@" || \
   echo usage
 )"
@@ -58,6 +64,24 @@ while [ $# -gt 0 ]; do
       echo "$1" | \
         tr -d '\n' > \
         "${tmp_dir}/magnet.dual"
+    ;;
+    '--mirror-dir')
+      if [ -s "${tmp_dir}/mirror_dir.set" ]; then
+        printf 'Option %s given multiple times.\n' "$1"
+        usage
+      fi
+      shift
+      mirror_dir="$1"
+      echo "$mirror_dir" > "${tmp_dir}/mirror_dir.set"
+    ;;
+    '--website-dir')
+      if [ -s "${tmp_dir}/website_dir.set" ]; then
+        printf 'Option %s given multiple times.\n' "$1"
+        usage
+      fi
+      shift
+      website_dir="$1"
+      echo "$website_dir" > "${tmp_dir}/website_dir.set"
     ;;
     '--')
       shift
