@@ -90,6 +90,7 @@ while [ $# -gt 0 ]; do
       echo "$1" | \
         tr -d '\n' > \
         "${tmp_dir}/torrent-seed.dual"
+    ;;
     '--mirror-dir')
       if [ -s "${tmp_dir}/mirror_dir.set" ]; then
         printf 'Option %s given multiple times.\n' "$1"
