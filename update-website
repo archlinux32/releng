@@ -24,6 +24,8 @@ usage() {
   >&2 echo '                Set website-dir to $dir.'
   >&2 echo '  --mirror-dir $dir:'
   >&2 echo '                Set mirror-dir to $dir.'
+  >&2 echo '  --update-iso:'
+  >&2 echo '                Update information about iso, too.'
   [ -z "$1" ] && exit 1 || exit "$1"
 }
 
@@ -36,6 +38,7 @@ eval set -- "$(
   --long torrent-seed-dual: \
   --long mirror-dir: \
   --long website-dir: \
+  --long update-iso \
   -n "$(basename "$0")" -- "$@" || \
   echo usage
 )"
@@ -108,6 +111,13 @@ while [ $# -gt 0 ]; do
       shift
       website_dir="$1"
       echo "$website_dir" > "${tmp_dir}/website_dir.set"
+    ;;
+    '--update-iso')
+      if [ -s "${tmp_dir}/update_iso.set" ]; then
+        printf 'Option %s given multiple times.\n' "$1"
+        usage
+      fi
+      echo "true" > "${tmp_dir}/update_iso.set"
     ;;
     '--')
       shift
@@ -193,6 +203,40 @@ latest_iso_date="$(
 declare -A desc
 desc['i686']='i686 only'
 desc['dual']='dual bootable'
+
+for arch in "${!desc[@]}"; do
+  if [ ! -s "${tmp_dir}/magnet.${arch}" ]; then
+    continue
+  fi
+  if ! tr '&' '\n' < \
+    "${tmp_dir}/magnet.${arch}" | \
+    grep -qxF "dn=archlinux-${latest_iso_date}-${arch}.iso"; then
+    >&2 printf 'Magnet link for %s is not for %s, skipping.\n' "${arch}" "archlinux-${latest_iso_date}-${arch}.iso"
+    continue
+  fi
+  sed -i '
+    /<li><a href="magnet:?.*-'"${arch}"'\.iso/ s/href="[^"]\+"/href="'"$(sed 's|&|\\&|g' "${tmp_dir}/magnet.${arch}")"'"/
+    /title="Magnet link">Magnet link for \S\+ ('"${desc["${arch}"]}"')/ s/>Magnet link for \S\+ />Magnet link for '"${latest_iso_date}"' /
+  ' "${website_dir}/download/index.html"
+done
+
+for arch in "${!desc[@]}"; do
+  if [ ! -s "${tmp_dir}/torrent-seed.${arch}" ]; then
+    continue
+  fi
+  if ! grep -qF "archlinux-${latest_iso_date}-${arch}" "${tmp_dir}/torrent-seed.${arch}"; then
+    >&2 printf 'Torrent seed for %s is not for %s, skipping.\n' "${arch}" "archlinux-${latest_iso_date}-${arch}.iso"
+    continue
+  fi
+  sed -i '
+  /<li><a href="http.*-'"${arch}"'\.iso.torrent/ s/href="[^"]\+"/href="'"$(sed -e 's_/_\\/_g' "${tmp_dir}/torrent-seed.${arch}")"'"/
+    /title="Download torrent">Torrent for \S\+ ('"${desc["${arch}"]}"')/ s/>Torrent for \S\+ />Torrent for '"${latest_iso_date}"' /
+  ' "${website_dir}/download/index.html"
+done
+
+if [ ! -s "${tmp_dir}/update_iso.set" ]; then
+  exit
+fi
 
 unset kernels
 unset sizes
@@ -281,33 +325,3 @@ sed -i "$(
 )
 " \
   "${website_dir}/download/index.html"
-
-for arch in "${!desc[@]}"; do
-  if [ ! -s "${tmp_dir}/magnet.${arch}" ]; then
-    continue
-  fi
-  if ! tr '&' '\n' < \
-    "${tmp_dir}/magnet.${arch}" | \
-    grep -qxF "dn=archlinux-${latest_iso_date}-${arch}.iso"; then
-    >&2 printf 'Magnet link for %s is not for %s, skipping.\n' "${arch}" "archlinux-${latest_iso_date}-${arch}.iso"
-    continue
-  fi
-  sed -i '
-    /<li><a href="magnet:?.*-'"${arch}"'\.iso/ s/href="[^"]\+"/href="'"$(sed 's|&|\\&|g' "${tmp_dir}/magnet.${arch}")"'"/
-    /title="Magnet link">Magnet link for \S\+ ('"${desc["${arch}"]}"')/ s/>Magnet link for \S\+ />Magnet link for '"${latest_iso_date}"' /
-  ' "${website_dir}/download/index.html"
-done
-
-for arch in "${!desc[@]}"; do
-  if [ ! -s "${tmp_dir}/torrent-seed.${arch}" ]; then
-    continue
-  fi
-  if ! grep -qF "archlinux-${latest_iso_date}-${arch}" "${tmp_dir}/torrent-seed.${arch}"; then
-    >&2 printf 'Torrent seed for %s is not for %s, skipping.\n' "${arch}" "archlinux-${latest_iso_date}-${arch}.iso"
-    continue
-  fi
-  sed -i '
-  /<li><a href="http.*-'"${arch}"'\.iso.torrent/ s/href="[^"]\+"/href="'"$(sed -e 's_/_\\/_g' "${tmp_dir}/torrent-seed.${arch}")"'"/
-    /title="Download torrent">Torrent for \S\+ ('"${desc["${arch}"]}"')/ s/>Torrent for \S\+ />Torrent for '"${latest_iso_date}"' /
-  ' "${website_dir}/download/index.html"
-done
