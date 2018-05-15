@@ -24,8 +24,8 @@ usage() {
   >&2 echo '                Set website-dir to $dir.'
   >&2 echo '  --mirror-dir $dir:'
   >&2 echo '                Set mirror-dir to $dir.'
-  >&2 echo '  --torrent-only:'
-  >&2 echo '                Update only torrent related data.'
+  >&2 echo '  --update-iso:'
+  >&2 echo '                Update information about iso, too.'
   [ -z "$1" ] && exit 1 || exit "$1"
 }
 
@@ -38,7 +38,7 @@ eval set -- "$(
   --long torrent-seed-dual: \
   --long mirror-dir: \
   --long website-dir: \
-  --long torrent-only \
+  --long update-iso \
   -n "$(basename "$0")" -- "$@" || \
   echo usage
 )"
@@ -112,12 +112,12 @@ while [ $# -gt 0 ]; do
       website_dir="$1"
       echo "$website_dir" > "${tmp_dir}/website_dir.set"
     ;;
-    '--torrent-only')
-      if [ -s "${tmp_dir}/torrent_only.set" ]; then
+    '--update-iso')
+      if [ -s "${tmp_dir}/update_iso.set" ]; then
         printf 'Option %s given multiple times.\n' "$1"
         usage
       fi
-      echo "true" > "${tmp_dir}/torrent_only.set"
+      echo "true" > "${tmp_dir}/update_iso.set"
     ;;
     '--')
       shift
@@ -234,7 +234,7 @@ for arch in "${!desc[@]}"; do
   ' "${website_dir}/download/index.html"
 done
 
-if [ -s "${tmp_dir}/torrent_only.set" ]; then
+if [ ! -s "${tmp_dir}/update_iso.set" ]; then
   exit
 fi
 
