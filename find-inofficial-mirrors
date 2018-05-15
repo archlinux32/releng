@@ -1,0 +1,19 @@
+#!/bin/sh
+
+sudo journalctl -b "-${1:-0}" -u rsyncd | \
+  grep ' rsync on archlinux32/' | \
+  grep -ivwF "$(
+    dig pool.mirror.archlinux32.org | \
+      sed -n '
+        s/^pool32\.ddns\.eckner\.net\.\s.*\s/(/
+        T
+        s/$/)/
+        p
+      '
+    )" | \
+  sed '
+    s/.* \(\S\+\) (\S\+)$/\1/
+  ' | \
+  sort | \
+  uniq -c | \
+  sort -k1n,1
