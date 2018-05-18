@@ -21,9 +21,14 @@ fi
 
 diff=$(
   git -C "/usr/src/archlinux/packages/$2/repos/$1-x86_64" diff "${old_revision}" HEAD -- config | \
-    grep '^[+-]' | \
+    grep '^[+-].' | \
     grep -v '^+++\|^---'
 )
+
+if [ -z "${diff}" ]; then
+  >&2 echo 'nothing changed.'
+  exit 1
+fi
 
 {
   grep -vxF "$(
