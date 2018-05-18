@@ -1,12 +1,26 @@
 #!/bin/bash
 
-if [ $# -ne 3 ]; then
-  >&2 echo 'usage: update-kernel-config [repository] [kernel-name] [old-git-revision]'
+if [ $# -ne 2 ]; then
+  >&2 echo 'usage: update-kernel-config [repository] [kernel-name]'
   exit 2
 fi
 
+old_revision=$(
+  sed -n '
+    s/^# upstream git\( revision\)\?: *//
+    T
+    p
+  ' "/usr/src/github/archlinux32/packages/$1/$2/PKGBUILD"
+)
+
+if [ -z "${old_revision}" ]; then
+  >&2 echo 'Cannot detemine old upstream git revision.'
+  >&2 echo '"# upstream git revision: ..." line is missing.'
+  exit 1
+fi
+
 diff=$(
-  git -C "/usr/src/archlinux/packages/$2/repos/$1-x86_64" diff "$3" HEAD -- config | \
+  git -C "/usr/src/archlinux/packages/$2/repos/$1-x86_64" diff "${old_revision}" HEAD -- config | \
     grep '^[+-]' | \
     grep -v '^+++\|^---'
 )
@@ -28,3 +42,26 @@ diff=$(
     '
 } | \
   sponge "/usr/src/github/archlinux32/packages/$1/$2/config"
+
+sed -i '
+  1 s/^#.*$/# upstream git revision: '"$(
+    git -C "/usr/src/archlinux/packages" rev-parse HEAD
+  )"'/
+  s/'"$(
+    git -C "/usr/src/archlinux/packages/$2/repos/$1-x86_64" archive "${old_revision}" -- config | \
+      tar -Ox | \
+      sha256sum | \
+      awk '{print $1}'
+  )"'/'"$(
+    git -C "/usr/src/archlinux/packages/$2/repos/$1-x86_64" archive HEAD -- config | \
+      tar -Ox | \
+      sha256sum | \
+      awk '{print $1}'
+  )"'/g
+  s/'"$(
+    git -C "/usr/src/github/archlinux32/packages/$1/$2" archive HEAD -- config | \
+      tar -Ox | \
+      sha256sum | \
+      awk '{print $1}'
+  )"'/SKIP/g
+' "/usr/src/github/archlinux32/packages/$1/$2/PKGBUILD"
