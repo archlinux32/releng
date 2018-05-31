@@ -119,6 +119,9 @@ while [ $# -gt 0 ]; do
       fi
       echo "true" > "${tmp_dir}/update_iso.set"
     ;;
+    '--help'|'-h')
+      usage 0
+    ;;
     '--')
       shift
       break
